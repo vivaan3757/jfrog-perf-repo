@@ -1,0 +1,142 @@
+JFrog Xray Performance Automation Framework
+
+Overview
+
+This repository provides a distributed performance testing framework for JFrog Xray APIs using Locust. The framework automates:
+
+Creation of Docker repositories dynamically
+
+Creation of policies and watches with random identifiers
+
+Docker image tagging and pushing to your Artifactory Docker registry
+
+Distributed load testing with Locust master and multiple workers
+
+Aggregation and export of test results for analysis
+
+Integration with CI/CD pipelines via GitHub Actions
+
+Features
+Distributed Load Testing: Scales tests horizontally by running Locust workers alongside a master node.
+
+Dynamic Resource Creation: Automatically creates Docker repositories, policies, and watches with unique random names each test iteration to avoid conflicts.
+
+Docker Image Automation: Pulls, tags, logs in, and pushes Docker images to your JFrog Artifactory Docker registry.
+
+Comprehensive Reporting: Generates CSV files containing response times, throughput, and error details for further analysis.
+
+CI/CD Integration: Includes a GitHub Actions workflow to automate test runs and artifact uploads.
+
+Prerequisites
+Python 3.9 or higher
+
+Docker installed locally (for pushing images)
+
+Access to JFrog Artifactory with permissions for repo creation and image push
+
+JFrog API token or credentials
+
+Setup Instructions
+Clone the repository:
+
+bash
+Copy
+Edit
+git clone https://github.com/vivaan3757/jfrog-perf-repo.git
+cd jfrog
+Install Python dependencies:
+
+bash
+Copy
+Edit
+pip install -r requirements.txt
+Configure credentials and URLs:
+
+Edit the config.json file with your JFrog base URL and API token:
+
+json
+Copy
+Edit
+{
+  "base_url": "https://trialtsuvhi.jfrog.io",
+  "token": "<pass your token>",
+  "docker_registry": "trialtsuvhi.jfrog.io"
+}
+Set environment variables for Docker push (optional):
+
+bash
+Copy
+Edit
+export JFROG_USERNAME=<usename>
+export JFROG_PASSWORD=<password>
+Running Tests Locally
+Start the Locust master node
+bash
+Copy
+Edit
+locust -f locustfile.py --master
+Start one or more Locust worker nodes (in separate terminals)
+bash
+Copy
+Edit
+locust -f locustfile.py --worker --master-host=<MASTER_IP>
+Replace <MASTER_IP> with the IP address or hostname of the master node.
+
+Access the Locust Web UI
+Open your browser and go to http://localhost:8089 to configure and start your load test interactively.
+
+Running Tests Headlessly
+To run tests without UI and generate CSV reports:
+
+bash
+Copy
+Edit
+locust -f locustfile.py --headless -u 100 -r 10 --run-time 10m --master
+Start workers as before, and test results will be saved in CSV files (results_stats.csv, results_failures.csv, etc.).
+
+GitHub Actions CI/CD
+The included GitHub Actions workflow automatically:
+
+Sets up Python environment
+
+Creates the Docker repo, policy, and watch
+
+Logs into your Docker registry
+
+Pushes a Docker image
+
+Runs distributed Locust tests with 2 workers
+
+Uploads test result CSV files as artifacts
+
+Triggering Workflow
+On every push to the main branch
+
+Or via manual dispatch in the Actions tab
+
+Reports and Analysis
+After test execution, download the CSV files from the workflow artifacts or local run:
+
+Response Time Trends: Analyze average and percentile response times under load.
+
+Throughput: Requests per second metrics.
+
+Error Analysis: Breakdown of failures and HTTP error codes.
+
+You can visualize these metrics in Excel, Google Sheets, or import them into your favorite monitoring tool.
+
+Design Decisions and Assumptions
+Test entities (repos, policies, watches) are created dynamically with randomized names per iteration to avoid resource conflicts.
+
+self.client from Locust is used for HTTP calls to allow integrated metrics collection.
+
+Docker image push is done after repo creation to ensure valid repository existence.
+
+Locust master-worker model is leveraged for scalable load generation.
+
+CI/CD automation facilitates consistent and repeatable test executions with artifact collection.
+
+
+SAMPLE OUTPUT FROM TEST
+
+

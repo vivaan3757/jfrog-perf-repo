@@ -1,0 +1,91 @@
+name: Locust Distributed Test with Docker Push and Repo Creation
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  run-locust:
+    runs-on: ubuntu-latest
+    env:
+      BASE_URL: ${{ secrets.BASE_URL }}
+      TOKEN: ${{ secrets.TOKEN }}
+      JFROG_REGISTRY: trialtsuvhi.jfrog.io
+      DOCKER_IMAGE: alpine:3.9
+      DOCKER_REPO: perf-test-docker-local
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Python 3.9
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests locust
+
+      - name: Create Docker repo via Python script
+        run: |
+          python -c "
+              import os, requests
+              base_url = os.getenv('BASE_URL')
+              token = os.getenv('TOKEN')
+              headers = {'Authorization': f'Bearer {token}', 'Content-Type': 'application/json'}
+                url = f'{base_url}/artifactory/api/repositories/{DOCKER_REPO}'
+                data = {
+              'key': 'perf-test-docker-local',
+              'projectKey': '',
+              'packageType': 'docker',
+              'rclass': 'local',
+              'xrayIndex': True
+              }
+                r = requests.put(url, headers=headers, json=data)
+              print(f'Repo create status: {r.status_code} {r.text}')
+              if r.status_code not in [200, 201, 409]:
+                  raise Exception('Failed to create repo')"
+
+      - name: Docker login to JFrog registry
+        env:
+          JFROG_USERNAME: ${{ secrets.JFROG_USERNAME }}
+          JFROG_PASSWORD: ${{ secrets.JFROG_PASSWORD }}
+        run: |
+          echo "$JFROG_PASSWORD" | docker login $JFROG_REGISTRY --username $JFROG_USERNAME --password-stdin
+
+      - name: Pull alpine:3.9 image
+        run: docker pull alpine:3.9
+
+      - name: Tag image for JFrog registry
+        run: docker tag alpine:3.9 $JFROG_REGISTRY/$DOCKER_REPO/alpine:3.9
+
+      - name: Push image to JFrog registry
+        run: docker push $JFROG_REGISTRY/$DOCKER_REPO/alpine:3.9
+
+      - name: Run Locust master and workers
+        run: |
+          # Start locust master in background (headless mode with CSV reporting)
+          locust -f jfrog_perf_automation_flow.py --master --headless -u 10 -r 2 --run-time 1m --csv=results --csv-full-history &
+          MASTER_PID=$!
+          
+          # Wait for master to initialize
+          sleep 10
+          
+          # Start 3 worker nodes connecting to master
+          locust -f jfrog_perf_automation_flow.py --worker --master-host=127.0.0.1 &
+          WORKER1_PID=$!
+          locust -f jfrog_perf_automation_flow.py --worker --master-host=127.0.0.1 &
+          WORKER2_PID=$!
+          locust -f jfrog_perf_automation_flow.py --worker --master-host=127.0.0.1 &
+          WORKER3_PID=$!
+          
+          # Wait for master process to finish running
+          wait $MASTER_PID
+          
+          # Cleanup worker processes after master finishes
+          kill $WORKER1_PID $WORKER2_PID $WORKER3_PID|| true
+
